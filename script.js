@@ -56,35 +56,21 @@ async function parseSpeFile(file) {
         const buffer = await file.arrayBuffer();
         const dataView = new DataView(buffer);
         const HEADER_SIZE = 4100;
-        imageWidth = dataView.getUint16(42, true);
-        imageHeight = dataView.getUint16(656, true);
+        imageWidth = dataView.getUint16(42, true); imageHeight = dataView.getUint16(656, true);
         let numFrames = dataView.getUint32(1446, true);
         if (imageWidth === 0 || imageHeight === 0 || numFrames === 0) return alert('유효한 SPE 파일이 아닙니다.');
-        
         speFrames = [];
-        const pixelsPerFrame = imageWidth * imageHeight;
-        const bytesPerFrame = pixelsPerFrame * 2;
+        const pixelsPerFrame = imageWidth * imageHeight, bytesPerFrame = pixelsPerFrame * 2;
         for (let i = 0; i < numFrames; i++) {
             const frameOffset = HEADER_SIZE + (i * bytesPerFrame);
-            if (frameOffset + bytesPerFrame > buffer.byteLength) {
-                console.warn(`파일 끝 도달: 프레임 ${i + 1}부터 읽을 수 없습니다.`);
-                numFrames = i;
-                break;
-            }
-            // ▼▼▼ Uint18Array 오타를 수정한 최종 버전입니다 ▼▼▼
+            if (frameOffset + bytesPerFrame > buffer.byteLength) { numFrames = i; break; }
             speFrames.push(new Uint16Array(buffer, frameOffset, pixelsPerFrame));
-            // ▲▲▲ Uint18Array 오타를 수정한 최종 버전입니다 ▲▲▲
         }
-        
         if (speFrames.length === 0) return alert('파일에서 유효한 프레임을 불러오지 못했습니다.');
-        
         updateFrameList(speFrames.length);
         const firstCheckbox = frameListContainer.querySelector('input[type=checkbox]');
         if (firstCheckbox) { firstCheckbox.checked = true; updateDisplay(); }
-    } catch (error) {
-        console.error("파일 파싱 오류:", error);
-        alert("파일을 읽는 중 오류가 발생했습니다. 개발자 콘솔을 확인해주세요.");
-    }
+    } catch (error) { console.error("파일 파싱 오류:", error); alert("파일을 읽는 중 오류가 발생했습니다."); }
 }
 
 // --- UI 업데이트 및 상태 관리 ---
@@ -103,11 +89,8 @@ function updateDisplay() {
     if (checkedIndexes.length === 0) { currentDisplayData = null; initialize(); return; }
     else if (checkedIndexes.length === 1) { currentDisplayData = speFrames[checkedIndexes[0]]; }
     else {
-        const frameSize = imageWidth * imageHeight;
-        const avgData = new Float32Array(frameSize).fill(0);
-        for (const index of checkedIndexes) {
-            for (let i = 0; i < frameSize; i++) avgData[i] += speFrames[index][i];
-        }
+        const frameSize = imageWidth * imageHeight, avgData = new Float32Array(frameSize).fill(0);
+        for (const index of checkedIndexes) for (let i = 0; i < frameSize; i++) avgData[i] += speFrames[index][i];
         for (let i = 0; i < frameSize; i++) avgData[i] /= checkedIndexes.length;
         currentDisplayData = avgData;
     }
@@ -184,8 +167,22 @@ function drawProfileGraph() {
 rangeMinInput.addEventListener('input', drawImage);
 rangeMaxInput.addEventListener('input', drawImage);
 
-function getCanvasCoords(e) { const rect = previewCanvas.getBoundingClientRect(); return { x: e.clientX - rect.left, y: e.clientY - rect.top }; }
-function getImageCoords(canvasPos) { return { x: (canvasPos.x - panOffset.x) / zoom, y: (canvasPos.y - panOffset.y) / zoom }; }
+// ▼▼▼ 좌표 변환 로직 수정 ▼▼▼
+function getCanvasCoords(e) {
+    const rect = previewCanvas.getBoundingClientRect();
+    // 화면상 캔버스 크기와 실제 캔버스 해상도의 비율을 계산하여 마우스 좌표를 보정
+    return {
+        x: (e.clientX - rect.left) * (previewCanvas.width / rect.width),
+        y: (e.clientY - rect.top) * (previewCanvas.height / rect.height)
+    };
+}
+function getImageCoords(canvasPos) {
+    return {
+        x: (canvasPos.x - panOffset.x) / zoom,
+        y: (canvasPos.y - panOffset.y) / zoom
+    };
+}
+// ▲▲▲ 좌표 변환 로직 수정 ▲▲▲
 
 function showPixelInfo(e) {
     if (!currentDisplayData) return;
@@ -194,105 +191,4 @@ function showPixelInfo(e) {
     if (x >= 0 && x < imageWidth && y >= 0 && y < imageHeight) {
         const pixelValue = currentDisplayData[y * imageWidth + x];
         pixelInfo.style.display = 'block';
-        pixelInfo.textContent = `X:${x}, Y:${y}, Val:${pixelValue.toFixed(2)}`;
-    } else { pixelInfo.style.display = 'none'; }
-}
-
-let panTimeout;
-previewCanvas.addEventListener('mousedown', (e) => {
-    if (!currentDisplayData) return;
-    panStartMousePos = { x: e.clientX, y: e.clientY };
-    panTimeout = setTimeout(() => { isPanning = true; previewCanvas.style.cursor = 'grabbing'; }, 150);
-});
-
-previewCanvas.addEventListener('mouseup', (e) => {
-    clearTimeout(panTimeout);
-    if (!isPanning) { // 패닝이 시작되지 않았을 때만 클릭으로 간주
-        const imagePos = getImageCoords(getCanvasCoords(e));
-        const y = Math.round(imagePos.y);
-        if (y >= 0 && y < imageHeight) { selectedRowY = y; drawImage(); }
-    }
-    isPanning = false;
-    previewCanvas.style.cursor = 'crosshair';
-});
-
-previewCanvas.addEventListener('mouseleave', () => { isPanning = false; previewCanvas.style.cursor = 'crosshair'; });
-
-previewCanvas.addEventListener('mousemove', (e) => {
-    showPixelInfo(e);
-    if (isPanning) {
-        const dx = e.clientX - panStartMousePos.x;
-        const dy = e.clientY - panStartMousePos.y;
-        panOffset.x += dx;
-        panOffset.y += dy;
-        panStartMousePos = { x: e.clientX, y: e.clientY };
-        drawImage();
-    }
-});
-
-previewCanvas.addEventListener('wheel', (e) => {
-    e.preventDefault();
-    if (!currentDisplayData) return;
-    const canvasPos = getCanvasCoords(e);
-    const zoomFactor = 1.1;
-    const oldZoom = zoom;
-    if (e.deltaY < 0) zoom *= zoomFactor; else zoom /= zoomFactor;
-    zoom = Math.max(0.1, Math.min(20, zoom));
-    panOffset.x = canvasPos.x - (canvasPos.x - panOffset.x) / oldZoom * zoom;
-    panOffset.y = canvasPos.y - (canvasPos.y - panOffset.y) / oldZoom * zoom;
-    drawImage();
-});
-
-profileCanvas.addEventListener('click', (e) => {
-    if (!plottedData) return;
-    const rect = profileCanvas.getBoundingClientRect(), x = Math.round((e.clientX - rect.left) * (plottedData.length - 1) / rect.width);
-    if (settingPeakLine === 1) peakLine1X = x; else if (settingPeakLine === 2) peakLine2X = x;
-    if (settingIntegralLine === 1) integralLine1X = x; else if (settingIntegralLine === 2) integralLine2X = x;
-    if (settingBgPoint === 1) bgPoint1 = { x, y: plottedData[x] }; else if (settingBgPoint === 2) bgPoint2 = { x, y: plottedData[x] };
-    settingPeakLine = 0; settingIntegralLine = 0; settingBgPoint = 0;
-    updateAnalysis(); drawProfileGraph();
-});
-
-calculateAndPlotBtn.addEventListener('click', () => {
-    if (!currentDisplayData) return alert("먼저 파일을 불러오세요.");
-    const xFrom = parseInt(cropXFrom.value), xTo = parseInt(cropXTo.value), yFrom = parseInt(cropYFrom.value), yTo = parseInt(cropYTo.value);
-    if ([xFrom, xTo, yFrom, yTo].some(isNaN)) return alert("모든 X, Y Range 값을 입력해주세요.");
-    plottedData = [];
-    for (let x = xFrom; x < xTo; x++) {
-        let ySum = 0;
-        for (let y = yFrom; y < yTo; y++) ySum += currentDisplayData[y * imageWidth + x];
-        plottedData.push(ySum / (yTo - yFrom));
-    }
-    bgPoint1 = null; bgPoint2 = null;
-    drawProfileGraph();
-    saveAvgDataBtn.style.display = 'inline-block';
-});
-
-saveAvgDataBtn.addEventListener('click', () => {
-    if (!currentDisplayData) return alert("먼저 파일을 불러오세요.");
-    const xFrom = parseInt(cropXFrom.value), xTo = parseInt(cropXTo.value), xStep = parseInt(cropXStep.value), yFrom = parseInt(cropYFrom.value), yTo = parseInt(cropYTo.value), yStep = parseInt(cropYStep.value);
-    if ([xFrom, xTo, xStep, yFrom, yTo, yStep].some(isNaN)) return alert("모든 From, To, Step 값을 입력해주세요.");
-    let textContent = "X_center,Y_center,Average_Value\n";
-    for (let y = yFrom; y < yTo; y += yStep) for (let x = xFrom; x < xTo; x += xStep) {
-        let sum = 0, count = 0;
-        for (let j = y; j < y + yStep && j < yTo && j < imageHeight; j++) for (let i = x; i < x + xStep && i < xTo && i < imageWidth; i++) { sum += currentDisplayData[j * imageWidth + i]; count++; }
-        if (count > 0) textContent += `${(x + (x+xStep-1))/2},${(y + (y+yStep-1))/2},${(sum / count).toFixed(4)}\n`;
-    }
-    downloadTextFile("cropped_average_data.txt", textContent);
-});
-
-setPeak1Btn.addEventListener('click', () => settingPeakLine = 1);
-setPeak2Btn.addEventListener('click', () => settingPeakLine = 2);
-setBg1Btn.addEventListener('click', () => settingBgPoint = 1);
-setBg2Btn.addEventListener('click', () => settingBgPoint = 2);
-setIntegral1Btn.addEventListener('click', () => settingIntegralLine = 1);
-setIntegral2Btn.addEventListener('click', () => settingIntegralLine = 2);
-
-// --- 분석 계산 ---
-function getBackgroundLine() { if (!bgPoint1 || !bgPoint2) return null; if (bgPoint1.x === bgPoint2.x) return { slope: 0, intercept: bgPoint1.y }; const slope = (bgPoint2.y - bgPoint1.y) / (bgPoint2.x - bgPoint1.x); const intercept = bgPoint1.y - slope * bgPoint1.x; return { slope, intercept }; }
-function updateAnalysis() { if (!plottedData) { peakDeltaDisplay.textContent = "N/A"; peakCenterDisplay.textContent = "N/A"; integralValueDisplay.textContent = "N/A"; return; } if (peakLine1X !== -1 && peakLine2X !== -1) { peakDeltaDisplay.textContent = Math.abs(peakLine1X - peakLine2X); peakCenterDisplay.textContent = ((peakLine1X + peakLine2X) / 2).toFixed(2); } else { peakDeltaDisplay.textContent = "N/A"; peakCenterDisplay.textContent = "N/A"; } if (integralLine1X !== -1 && integralLine2X !== -1) { const start = Math.min(integralLine1X, integralLine2X), end = Math.max(integralLine1X, integralLine2X); let sum = 0; const bgLine = getBackgroundLine(); for (let i = start; i <= end; i++) { const signal = plottedData[i]; if (bgLine) { const background = bgLine.slope * i + bgLine.intercept; sum += (signal - background); } else { sum += signal; } } integralValueDisplay.textContent = sum.toExponential(3); } else { integralValueDisplay.textContent = "N/A"; } }
-
-// --- 헬퍼 함수 및 드래그 앤 드롭 ---
-function downloadTextFile(filename, text) { const a = document.createElement('a'); a.href = 'data:text/plain;charset=utf-8,' + encodeURIComponent(text); a.download = filename; document.body.appendChild(a); a.click(); document.body.removeChild(a); }
-document.body.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
-document.body.addEventListener('drop', async (e) => { e.preventDefault(); if (e.dataTransfer.files.length > 0 && e.dataTransfer.files[0].name.toLowerCase().endsWith('.spe')) await parseSpeFile(e.dataTransfer.files[0]); });
+        pixelInfo.textContent
