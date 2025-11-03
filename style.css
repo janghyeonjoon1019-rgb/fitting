@@ -128,3 +128,21 @@ button:hover {
 input[type="file"] {
     margin-bottom: 10px;
 }
+/* 픽셀 정보창 스타일 */
+#pixel-info {
+    position: absolute;
+    bottom: 5px;
+    left: 5px;
+    background-color: rgba(0, 0, 0, 0.6);
+    color: white;
+    padding: 5px 8px;
+    border-radius: 4px;
+    font-size: 14px;
+    pointer-events: none; /* 마우스 이벤트가 캔버스로 전달되도록 함 */
+    display: none; /* 평소에는 숨김 */
+}
+
+/* Intensity 숫자 입력창 스타일 */
+.intensity-input {
+    width: 60px; /* 적절한 너비 지정 */
+}
