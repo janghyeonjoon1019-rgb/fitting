@@ -39,24 +39,23 @@
 
              <fieldset>
                 <legend>Data Cropping & Averaging</legend>
-                 <p>이 범위로 잘라내어 값들의 평균을 텍스트로 저장합니다.</p>
+                 <p>지정한 Y범위의 평균값을 계산하여 그래프를 그리고 텍스트로 저장합니다.</p>
                 <div class="crop-grid">
-                    <span>X:</span>
+                    <span>X Range:</span>
                     <input type="number" id="cropXFrom" placeholder="from">
                     <span>→</span>
                     <input type="number" id="cropXTo" placeholder="to">
-                    <span>step:</span>
-                    <input type="number" id="cropXStep" placeholder="step">
                 </div>
                 <div class="crop-grid">
-                    <span>Y:</span>
+                    <span>Y Range:</span>
                     <input type="number" id="cropYFrom" placeholder="from">
                     <span>→</span>
                     <input type="number" id="cropYTo" placeholder="to">
-                    <span>step:</span>
-                    <input type="number" id="cropYStep" placeholder="step">
                 </div>
-                <button id="saveAvgDataBtn">평균값 텍스트로 저장</button>
+                <!-- ▼▼▼ 버튼 구조 변경 ▼▼▼ -->
+                <button id="calculateAndPlotBtn">평균화</button>
+                <button id="saveAvgDataBtn" style="display: none;">결과 텍스트로 저장</button>
+                <!-- ▲▲▲ 버튼 구조 변경 ▲▲▲ -->
             </fieldset>
         </div>
 
