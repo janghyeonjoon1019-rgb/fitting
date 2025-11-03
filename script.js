@@ -19,11 +19,11 @@ const setIntegral2Btn = document.getElementById('setIntegral2');
 const integralValueDisplay = document.getElementById('integralValue');
 const cropXFrom = document.getElementById('cropXFrom');
 const cropXTo = document.getElementById('cropXTo');
+// step은 텍스트 저장에만 사용되므로 여기서는 DOM을 가져오지 않음
 const cropYFrom = document.getElementById('cropYFrom');
 const cropYTo = document.getElementById('cropYTo');
 const calculateAndPlotBtn = document.getElementById('calculateAndPlotBtn');
 const saveAvgDataBtn = document.getElementById('saveAvgDataBtn');
-// 이론 계산 UI 요소
 const fittingControls = document.getElementById('fitting-controls');
 const drawFitBtn = document.getElementById('drawFitBtn');
 
@@ -36,7 +36,7 @@ let settingBgPoint = 0, bgPoint1 = null, bgPoint2 = null;
 let zoom = 1, panOffset = { x: 0, y: 0 };
 let isPanning = false, panStartMousePos = { x: 0, y: 0 };
 let panTimeout;
-let theoreticalFitData = null; // 이론 계산 결과 데이터 저장
+let theoreticalFitData = null;
 
 // --- 초기화 ---
 function initialize() {
@@ -68,6 +68,7 @@ async function parseSpeFile(file) {
         for (let i = 0; i < numFrames; i++) {
             const frameOffset = HEADER_SIZE + (i * bytesPerFrame);
             if (frameOffset + bytesPerFrame > buffer.byteLength) {
+                console.warn(`파일 끝 도달: 프레임 ${i + 1}부터 읽을 수 없습니다.`);
                 numFrames = i;
                 break;
             }
@@ -111,8 +112,8 @@ function updateDisplay() {
     drawImage();
     plottedData = null; saveAvgDataBtn.style.display = 'none';
     bgPoint1 = null; bgPoint2 = null;
-    theoreticalFitData = null; // 표시 이미지가 바뀌면 이론 계산 데이터도 초기화
-    fittingControls.style.display = 'none'; // 피팅 UI 숨기기
+    theoreticalFitData = null;
+    fittingControls.style.display = 'none';
     initializeProfileCanvas();
 }
 
@@ -148,15 +149,13 @@ function drawImage() {
 function drawProfileGraph() {
     if (!plottedData) return initializeProfileCanvas();
     pfCtx.clearRect(0, 0, profileCanvas.width, profileCanvas.height);
-    
     let allYData = [...plottedData];
     if (theoreticalFitData) { allYData.push(...theoreticalFitData.y); }
     let minVal = Math.min(...allYData), maxVal = Math.max(...allYData);
-
-    const range = maxVal - minVal === 0 ? 1 : maxVal - minVal;
+    if (minVal === maxVal) { minVal -=1; maxVal +=1; }
+    const range = maxVal - minVal;
     const toCanvasY = (dataY) => (1 - (dataY - minVal) / range) * (profileCanvas.height * 0.9) + (profileCanvas.height * 0.05);
 
-    // 초록색 실험 데이터
     pfCtx.beginPath(); pfCtx.strokeStyle = 'green'; pfCtx.lineWidth = 2;
     for (let x = 0; x < plottedData.length; x++) {
         const canvasX = (x / (plottedData.length - 1)) * profileCanvas.width;
@@ -165,22 +164,21 @@ function drawProfileGraph() {
     }
     pfCtx.stroke();
     
-    // 파란색 이론 데이터
     if (theoreticalFitData) {
         pfCtx.beginPath(); pfCtx.strokeStyle = 'blue'; pfCtx.lineWidth = 1.5;
+        let firstPoint = true;
         for (let i = 0; i < theoreticalFitData.x.length; i++) {
             const pixelIndex = theoreticalFitData.x[i];
             const canvasX = (pixelIndex / (plottedData.length - 1)) * profileCanvas.width;
             const canvasY = toCanvasY(theoreticalFitData.y[i]);
-            // 그래프 영역을 벗어나는 데이터는 그리지 않음
-            if (canvasX >= 0 && canvasX <= profileCanvas.width) {
-                 i === 0 || plottedData.length -1 < theoreticalFitData.x[i-1] ? pfCtx.moveTo(canvasX, canvasY) : pfCtx.lineTo(canvasX, canvasY);
+            if (pixelIndex >= 0 && pixelIndex < plottedData.length) {
+                if (firstPoint) { pfCtx.moveTo(canvasX, canvasY); firstPoint = false; }
+                else { pfCtx.lineTo(canvasX, canvasY); }
             }
         }
         pfCtx.stroke();
     }
-
-    // 배경선 및 분석선
+    
     if (bgPoint1 && bgPoint2) {
         const bgLine = getBackgroundLine();
         const startY = bgLine.slope * 0 + bgLine.intercept;
@@ -216,4 +214,126 @@ function showPixelInfo(e) {
     } else { pixelInfo.style.display = 'none'; }
 }
 
-previewCanvas.addEventListen
+previewCanvas.addEventListener('mousedown', (e) => {
+    if (!currentDisplayData) return;
+    panStartMousePos = { x: e.clientX, y: e.clientY };
+    panTimeout = setTimeout(() => { isPanning = true; previewCanvas.style.cursor = 'grabbing'; }, 150);
+});
+previewCanvas.addEventListener('mouseup', (e) => {
+    clearTimeout(panTimeout);
+    if (!isPanning) {
+        const imagePos = getImageCoords(getCanvasCoords(e));
+        const y = Math.round(imagePos.y);
+        if (y >= 0 && y < imageHeight) { selectedRowY = y; drawImage(); }
+    }
+    isPanning = false;
+    previewCanvas.style.cursor = 'crosshair';
+});
+previewCanvas.addEventListener('mouseleave', () => { isPanning = false; previewCanvas.style.cursor = 'crosshair'; });
+previewCanvas.addEventListener('mousemove', (e) => {
+    showPixelInfo(e);
+    if (isPanning) {
+        const dx = e.clientX - panStartMousePos.x; const dy = e.clientY - panStartMousePos.y;
+        panOffset.x += dx; panOffset.y += dy;
+        panStartMousePos = { x: e.clientX, y: e.clientY };
+        drawImage();
+    }
+});
+previewCanvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    if (!currentDisplayData) return;
+    const canvasPos = getCanvasCoords(e);
+    const zoomFactor = 1.1; const oldZoom = zoom;
+    if (e.deltaY < 0) zoom *= zoomFactor; else zoom /= zoomFactor;
+    zoom = Math.max(0.1, Math.min(20, zoom));
+    panOffset.x = canvasPos.x - (canvasPos.x - panOffset.x) / oldZoom * zoom;
+    panOffset.y = canvasPos.y - (canvasPos.y - panOffset.y) / oldZoom * zoom;
+    drawImage();
+});
+
+profileCanvas.addEventListener('click', (e) => {
+    if (!plottedData) return;
+    const rect = profileCanvas.getBoundingClientRect(), x = Math.round((e.clientX - rect.left) * (plottedData.length - 1) / rect.width);
+    if (settingPeakLine === 1) peakLine1X = x; else if (settingPeakLine === 2) peakLine2X = x;
+    if (settingIntegralLine === 1) integralLine1X = x; else if (settingIntegralLine === 2) integralLine2X = x;
+    if (settingBgPoint === 1) bgPoint1 = { x, y: plottedData[x] }; else if (settingBgPoint === 2) bgPoint2 = { x, y: plottedData[x] };
+    settingPeakLine = 0; settingIntegralLine = 0; settingBgPoint = 0;
+    updateAnalysis(); drawProfileGraph();
+});
+
+calculateAndPlotBtn.addEventListener('click', () => {
+    if (!currentDisplayData) return alert("먼저 파일을 불러오세요.");
+    const xFrom = parseInt(cropXFrom.value), xTo = parseInt(cropXTo.value);
+    const yFrom = parseInt(cropYFrom.value), yTo = parseInt(cropYTo.value);
+    if ([xFrom, xTo, yFrom, yTo].some(isNaN)) return alert("모든 X, Y Range 값을 입력해주세요.");
+    plottedData = [];
+    for (let x = xFrom; x < xTo; x++) {
+        let ySum = 0;
+        for (let y = yFrom; y < yTo; y++) ySum += currentDisplayData[y * imageWidth + x];
+        plottedData.push(ySum / (yTo - yFrom));
+    }
+    bgPoint1 = null; bgPoint2 = null;
+    theoreticalFitData = null;
+    drawProfileGraph();
+    saveAvgDataBtn.style.display = 'inline-block';
+    fittingControls.style.display = 'block';
+});
+
+drawFitBtn.addEventListener('click', () => {
+    if (!plottedData) return alert("먼저 '평균화' 버튼을 눌러주세요.");
+    const ne = parseFloat(document.getElementById('fit_ne').value) * 1e24;
+    const Te = parseFloat(document.getElementById('fit_Te').value);
+    const Z = parseFloat(document.getElementById('fit_Z').value);
+    const dopplerShift = parseFloat(document.getElementById('fit_DS').value);
+    const baseline = parseFloat(document.getElementById('fit_base').value);
+    const amplitudeScale = parseFloat(document.getElementById('fit_amp').value);
+    const xFrom = parseInt(cropXFrom.value);
+    const D = 0.18, ppICCD = 0.013, dlICCD = D * ppICCD;
+    const rayleighCenterPixel = xFrom + (plottedData.length / 2);
+
+    const props = Float64Array.from([3, ne, Z, 1, Te, Te, rayleighCenterPixel, dopplerShift, D, ppICCD, 6, 3, 135, 10000, 5, 5, 2.5e25, 100, 1e5, false, ne]);
+    
+    const theoreticalY = calcYAxis(props);
+    const theoreticalX_nm = calcXAxis(Float64Array.from([dopplerShift]));
+    const theoreticalX_pixel = theoreticalX_nm.map(nm => (nm / dlICCD) + rayleighCenterPixel - xFrom);
+    
+    theoreticalFitData = {
+        x: theoreticalX_pixel,
+        y: theoreticalY.map(y => y * amplitudeScale + baseline)
+    };
+    
+    drawProfileGraph();
+});
+
+saveAvgDataBtn.addEventListener('click', () => {
+    // 이 함수는 이전에 제공된 것과 동일하며 변경 사항이 없습니다.
+    // ...
+});
+
+setPeak1Btn.addEventListener('click', () => settingPeakLine = 1);
+setPeak2Btn.addEventListener('click', () => settingPeakLine = 2);
+setBg1Btn.addEventListener('click', () => settingBgPoint = 1);
+setBg2Btn.addEventListener('click', () => settingBgPoint = 2);
+setIntegral1Btn.addEventListener('click', () => settingIntegralLine = 1);
+setIntegral2Btn.addEventListener('click', () => settingIntegralLine = 2);
+
+function getBackgroundLine() { if (!bgPoint1 || !bgPoint2) return null; if (bgPoint1.x === bgPoint2.x) return { slope: 0, intercept: bgPoint1.y }; const slope = (bgPoint2.y - bgPoint1.y) / (bgPoint2.x - bgPoint1.x); const intercept = bgPoint1.y - slope * bgPoint1.x; return { slope, intercept }; }
+function updateAnalysis() { if (!plottedData) { peakDeltaDisplay.textContent = "N/A"; peakCenterDisplay.textContent = "N/A"; integralValueDisplay.textContent = "N/A"; return; } if (peakLine1X !== -1 && peakLine2X !== -1) { peakDeltaDisplay.textContent = Math.abs(peakLine1X - peakLine2X); peakCenterDisplay.textContent = ((peakLine1X + peakLine2X) / 2).toFixed(2); } else { peakDeltaDisplay.textContent = "N/A"; peakCenterDisplay.textContent = "N/A"; } if (integralLine1X !== -1 && integralLine2X !== -1) { const start = Math.min(integralLine1X, integralLine2X), end = Math.max(integralLine1X, integralLine2X); let sum = 0; const bgLine = getBackgroundLine(); for (let i = start; i <= end; i++) { const signal = plottedData[i]; if (bgLine) { const background = bgLine.slope * i + bgLine.intercept; sum += (signal - background); } else { sum += signal; } } integralValueDisplay.textContent = sum.toExponential(3); } else { integralValueDisplay.textContent = "N/A"; } }
+function downloadTextFile(filename, text) { const a = document.createElement('a'); a.href = 'data:text/plain;charset=utf-8,' + encodeURIComponent(text); a.download = filename; document.body.appendChild(a); a.click(); document.body.removeChild(a); }
+document.body.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
+document.body.addEventListener('drop', async (e) => { e.preventDefault(); if (e.dataTransfer.files.length > 0 && e.dataTransfer.files[0].name.toLowerCase().endsWith('.spe')) await parseSpeFile(e.dataTransfer.files[0]); });
+
+// saveAvgDataBtn의 전체 코드를 다시 추가합니다.
+saveAvgDataBtn.addEventListener('click', () => {
+    if (!currentDisplayData) return alert("먼저 파일을 불러오세요.");
+    const xFrom = parseInt(document.getElementById('cropXFrom').value), xTo = parseInt(document.getElementById('cropXTo').value), xStep = parseInt(document.getElementById('cropXStep').value);
+    const yFrom = parseInt(document.getElementById('cropYFrom').value), yTo = parseInt(document.getElementById('cropYTo').value), yStep = parseInt(document.getElementById('cropYStep').value);
+    if ([xFrom, xTo, xStep, yFrom, yTo, yStep].some(isNaN)) return alert("모든 From, To, Step 값을 입력해주세요.");
+    let textContent = "X_center,Y_center,Average_Value\n";
+    for (let y = yFrom; y < yTo; y += yStep) for (let x = xFrom; x < xTo; x += xStep) {
+        let sum = 0, count = 0;
+        for (let j = y; j < y + yStep && j < yTo && j < imageHeight; j++) for (let i = x; i < x + xStep && i < xTo && i < imageWidth; i++) { sum += currentDisplayData[j * imageWidth + i]; count++; }
+        if (count > 0) textContent += `${(x + (x+xStep-1))/2},${(y + (y+yStep-1))/2},${(sum / count).toFixed(4)}\n`;
+    }
+    downloadTextFile("cropped_average_data.txt", textContent);
+});
