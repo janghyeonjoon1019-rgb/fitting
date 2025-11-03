@@ -3,6 +3,10 @@ const fileInput = document.getElementById('fileInput');
 const frameListContainer = document.getElementById('frame-list-container');
 const avgButton = document.getElementById('avgButton');
 
+const rangeMinInput = document.getElementById('rangeMinInput');
+const rangeMaxInput = document.getElementById('rangeMaxInput');
+const pixelInfo = document.getElementById('pixel-info');
+
 const rangeMin = document.getElementById('rangeMin');
 const rangeMax = document.getElementById('rangeMax');
 const rangeMinDisplay = document.getElementById('rangeMinDisplay');
@@ -138,6 +142,9 @@ function updateFrameList(numFrames) {
 // --- 캔버스 드로잉 ---
 function drawImage() {
     if (speFrames.length === 0) return;
+
+    previewCanvas.addEventListener('mousemove', showPixelInfo);
+    previewCanvas.addEventListener('mouseleave', () => { pixelInfo.style.display = 'none'; });
 
     const pixelData = speFrames[currentFrameIndex];
     const min = parseInt(rangeMin.value, 10);
@@ -326,6 +333,77 @@ saveAvgDataBtn.addEventListener('click', () => {
     downloadTextFile("average_data.txt", textContent);
 });
 
+// ▼▼▼ Min/Max 제어 로직 수정 ▼▼▼
+function syncMinMax(source) {
+    let minVal = parseInt(rangeMinInput.value, 10);
+    let maxVal = parseInt(rangeMaxInput.value, 10);
+
+    // 유효하지 않은 값 보정
+    if (isNaN(minVal)) minVal = 0;
+    if (isNaN(maxVal)) maxVal = 65535;
+
+    if (minVal >= maxVal) {
+        if (source === 'min') {
+            minVal = maxVal - 1;
+        } else {
+            maxVal = minVal + 1;
+        }
+    }
+    
+    // 값 범위 제한
+    minVal = Math.max(0, Math.min(65534, minVal));
+    maxVal = Math.max(1, Math.min(65535, maxVal));
+    
+    // 모든 입력 요소에 값 동기화
+    rangeMin.value = minVal;
+    rangeMinInput.value = minVal;
+    rangeMax.value = maxVal;
+    rangeMaxInput.value = maxVal;
+
+    drawImage();
+}
+
+rangeMin.addEventListener('input', () => syncMinMax('min'));
+rangeMinInput.addEventListener('input', () => syncMinMax('min'));
+rangeMax.addEventListener('input', () => syncMinMax('max'));
+rangeMaxInput.addEventListener('input', () => syncMinMax('max'));
+// ▲▲▲ Min/Max 제어 로직 수정 ▲▲▲
+
+
+// ▼▼▼ 픽셀 정보 표시 함수 추가 ▼▼▼
+function showPixelInfo(e) {
+    if (speFrames.length === 0) return;
+
+    const rect = previewCanvas.getBoundingClientRect();
+    const scaleX = previewCanvas.width / rect.width;
+    const scaleY = previewCanvas.height / rect.height;
+
+    const x = Math.floor((e.clientX - rect.left) * scaleX);
+    const y = Math.floor((e.clientY - rect.top) * scaleY);
+
+    if (x >= 0 && x < imageWidth && y >= 0 && y < imageHeight) {
+        const pixelIndex = y * imageWidth + x;
+        const pixelValue = speFrames[currentFrameIndex][pixelIndex];
+        
+        pixelInfo.style.display = 'block';
+        pixelInfo.textContent = `X: ${x}, Y: ${y}, Value: ${pixelValue}`;
+    } else {
+        pixelInfo.style.display = 'none';
+    }
+}
+// ▲▲▲ 픽셀 정보 표시 함수 추가 ▲▲▲
+
+
+previewCanvas.addEventListener('click', (e) => {
+    const rect = previewCanvas.getBoundingClientRect();
+    const scaleY = previewCanvas.height / rect.height; // scaleX -> scaleY 로 수정
+    const y = Math.round((e.clientY - rect.top) * scaleY);
+
+    if (y >= 0 && y < imageHeight) {
+        selectedRowY = y;
+        drawImage();
+    }
+});
 
 // --- 분석 계산 ---
 function updateAnalysis() {
