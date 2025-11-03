@@ -31,11 +31,13 @@
             <fieldset>
                 <legend>Intensity Control</legend>
                 <div class="slider-container">
-                    <label for="rangeMin">min: <span id="rangeMinDisplay">0</span></label>
+                    <label for="rangeMin">min:</label>
+                    <input type="number" id="rangeMinInput" min="0" max="65535" value="0" class="intensity-input">
                     <input type="range" id="rangeMin" min="0" max="65535" value="0">
                 </div>
                 <div class="slider-container">
-                    <label for="rangeMax">max: <span id="rangeMaxDisplay">65535</span></label>
+                    <label for="rangeMax">max:</label>
+                    <input type="number" id="rangeMaxInput" min="0" max="65535" value="65535" class="intensity-input">
                     <input type="range" id="rangeMax" min="0" max="65535" value="65535">
                 </div>
             </fieldset>
@@ -64,8 +66,10 @@
 
         <!-- 오른쪽 패널: 이미지 및 그래프 표시 -->
         <div class="panel" id="right-panel">
-            <div id="canvas-container">
+            <div id="canvas-container" style="position: relative;">
                 <canvas id="previewCanvas" width="800" height="600"></canvas>
+                <!-- 픽셀 정보 표시창 추가 -->
+                <div id="pixel-info"></div>
             </div>
             <div id="profile-container">
                  <canvas id="profileCanvas" width="800" height="200"></canvas>
