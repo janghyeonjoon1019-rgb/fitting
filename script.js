@@ -19,7 +19,6 @@ const setIntegral2Btn = document.getElementById('setIntegral2');
 const integralValueDisplay = document.getElementById('integralValue');
 const cropXFrom = document.getElementById('cropXFrom');
 const cropXTo = document.getElementById('cropXTo');
-// step은 텍스트 저장에만 사용되므로 여기서는 DOM을 가져오지 않음
 const cropYFrom = document.getElementById('cropYFrom');
 const cropYTo = document.getElementById('cropYTo');
 const calculateAndPlotBtn = document.getElementById('calculateAndPlotBtn');
@@ -68,7 +67,6 @@ async function parseSpeFile(file) {
         for (let i = 0; i < numFrames; i++) {
             const frameOffset = HEADER_SIZE + (i * bytesPerFrame);
             if (frameOffset + bytesPerFrame > buffer.byteLength) {
-                console.warn(`파일 끝 도달: 프레임 ${i + 1}부터 읽을 수 없습니다.`);
                 numFrames = i;
                 break;
             }
@@ -307,8 +305,8 @@ drawFitBtn.addEventListener('click', () => {
 
 saveAvgDataBtn.addEventListener('click', () => {
     if (!currentDisplayData) return alert("먼저 파일을 불러오세요.");
-    const xFrom = parseInt(cropXFrom.value), xTo = parseInt(cropXTo.value), xStep = parseInt(cropXStep.value);
-    const yFrom = parseInt(cropYFrom.value), yTo = parseInt(cropYTo.value), yStep = parseInt(cropYStep.value);
+    const xFrom = parseInt(document.getElementById('cropXFrom').value), xTo = parseInt(document.getElementById('cropXTo').value), xStep = parseInt(document.getElementById('cropXStep').value);
+    const yFrom = parseInt(document.getElementById('cropYFrom').value), yTo = parseInt(document.getElementById('cropYTo').value), yStep = parseInt(document.getElementById('cropYStep').value);
     if ([xFrom, xTo, xStep, yFrom, yTo, yStep].some(isNaN)) return alert("모든 From, To, Step 값을 입력해주세요.");
     let textContent = "X_center,Y_center,Average_Value\n";
     for (let y = yFrom; y < yTo; y += yStep) for (let x = xFrom; x < xTo; x += xStep) {
@@ -331,18 +329,3 @@ function updateAnalysis() { if (!plottedData) { peakDeltaDisplay.textContent = "
 function downloadTextFile(filename, text) { const a = document.createElement('a'); a.href = 'data:text/plain;charset=utf-8,' + encodeURIComponent(text); a.download = filename; document.body.appendChild(a); a.click(); document.body.removeChild(a); }
 document.body.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
 document.body.addEventListener('drop', async (e) => { e.preventDefault(); if (e.dataTransfer.files.length > 0 && e.dataTransfer.files[0].name.toLowerCase().endsWith('.spe')) await parseSpeFile(e.dataTransfer.files[0]); });
-
-// saveAvgDataBtn의 전체 코드를 다시 추가합니다.
-saveAvgDataBtn.addEventListener('click', () => {
-    if (!currentDisplayData) return alert("먼저 파일을 불러오세요.");
-    const xFrom = parseInt(document.getElementById('cropXFrom').value), xTo = parseInt(document.getElementById('cropXTo').value), xStep = parseInt(document.getElementById('cropXStep').value);
-    const yFrom = parseInt(document.getElementById('cropYFrom').value), yTo = parseInt(document.getElementById('cropYTo').value), yStep = parseInt(document.getElementById('cropYStep').value);
-    if ([xFrom, xTo, xStep, yFrom, yTo, yStep].some(isNaN)) return alert("모든 From, To, Step 값을 입력해주세요.");
-    let textContent = "X_center,Y_center,Average_Value\n";
-    for (let y = yFrom; y < yTo; y += yStep) for (let x = xFrom; x < xTo; x += xStep) {
-        let sum = 0, count = 0;
-        for (let j = y; j < y + yStep && j < yTo && j < imageHeight; j++) for (let i = x; i < x + xStep && i < xTo && i < imageWidth; i++) { sum += currentDisplayData[j * imageWidth + i]; count++; }
-        if (count > 0) textContent += `${(x + (x+xStep-1))/2},${(y + (y+yStep-1))/2},${(sum / count).toFixed(4)}\n`;
-    }
-    downloadTextFile("cropped_average_data.txt", textContent);
-});
