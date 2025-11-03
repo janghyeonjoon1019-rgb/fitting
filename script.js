@@ -305,9 +305,10 @@ drawFitBtn.addEventListener('click', () => {
 
 saveAvgDataBtn.addEventListener('click', () => {
     if (!currentDisplayData) return alert("먼저 파일을 불러오세요.");
-    const xFrom = parseInt(document.getElementById('cropXFrom').value), xTo = parseInt(document.getElementById('cropXTo').value), xStep = parseInt(document.getElementById('cropXStep').value);
-    const yFrom = parseInt(document.getElementById('cropYFrom').value), yTo = parseInt(document.getElementById('cropYTo').value), yStep = parseInt(document.getElementById('cropYStep').value);
-    if ([xFrom, xTo, xStep, yFrom, yTo, yStep].some(isNaN)) return alert("모든 From, To, Step 값을 입력해주세요.");
+    // Data Cropping & Averaging에는 step이 없으므로, 기본값 1로 처리
+    const xFrom = parseInt(document.getElementById('cropXFrom').value), xTo = parseInt(document.getElementById('cropXTo').value), xStep = 1;
+    const yFrom = parseInt(document.getElementById('cropYFrom').value), yTo = parseInt(document.getElementById('cropYTo').value), yStep = 1;
+    if ([xFrom, xTo, yFrom, yTo].some(isNaN)) return alert("모든 From, To 값을 입력해주세요.");
     let textContent = "X_center,Y_center,Average_Value\n";
     for (let y = yFrom; y < yTo; y += yStep) for (let x = xFrom; x < xTo; x += xStep) {
         let sum = 0, count = 0;
