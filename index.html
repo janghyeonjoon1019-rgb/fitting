@@ -1,4 +1,4 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -41,14 +41,22 @@
 
             <fieldset>
                 <legend>Data Cropping & Averaging</legend>
-                 <p>지정한 Y범위의 평균값을 계산하여 그래프를 그리고 텍스트로 저장합니다.</p>
-                <div class="crop-grid short">
-                    <span>X Range:</span><input type="number" id="cropXFrom" placeholder="from">
-                    <span>→</span><input type="number" id="cropXTo" placeholder="to">
+                 <p>지정한 범위와 간격으로 데이터를 평균내어 그래프를 그리고 텍스트로 저장합니다.</p>
+                <div class="crop-grid">
+                    <span>X:</span>
+                    <input type="number" id="cropXFrom" placeholder="from">
+                    <span>→</span>
+                    <input type="number" id="cropXTo" placeholder="to">
+                    <span>step:</span>
+                    <input type="number" id="cropXStep" placeholder="step" value="1">
                 </div>
-                <div class="crop-grid short">
-                    <span>Y Range:</span><input type="number" id="cropYFrom" placeholder="from">
-                    <span>→</span><input type="number" id="cropYTo" placeholder="to">
+                <div class="crop-grid">
+                    <span>Y:</span>
+                    <input type="number" id="cropYFrom" placeholder="from">
+                    <span>→</span>
+                    <input type="number" id="cropYTo" placeholder="to">
+                    <span>step:</span>
+                    <input type="number" id="cropYStep" placeholder="step" value="1">
                 </div>
                 <button id="calculateAndPlotBtn">평균화</button>
                 <button id="saveAvgDataBtn" style="display: none;">결과 텍스트로 저장</button>
