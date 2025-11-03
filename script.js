@@ -19,8 +19,10 @@ const setIntegral2Btn = document.getElementById('setIntegral2');
 const integralValueDisplay = document.getElementById('integralValue');
 const cropXFrom = document.getElementById('cropXFrom');
 const cropXTo = document.getElementById('cropXTo');
+const cropXStep = document.getElementById('cropXStep');
 const cropYFrom = document.getElementById('cropYFrom');
 const cropYTo = document.getElementById('cropYTo');
+const cropYStep = document.getElementById('cropYStep');
 const calculateAndPlotBtn = document.getElementById('calculateAndPlotBtn');
 const saveAvgDataBtn = document.getElementById('saveAvgDataBtn');
 const fittingControls = document.getElementById('fitting-controls');
@@ -329,4 +331,4 @@ function getBackgroundLine() { if (!bgPoint1 || !bgPoint2) return null; if (bgPo
 function updateAnalysis() { if (!plottedData) { peakDeltaDisplay.textContent = "N/A"; peakCenterDisplay.textContent = "N/A"; integralValueDisplay.textContent = "N/A"; return; } if (peakLine1X !== -1 && peakLine2X !== -1) { peakDeltaDisplay.textContent = Math.abs(peakLine1X - peakLine2X); peakCenterDisplay.textContent = ((peakLine1X + peakLine2X) / 2).toFixed(2); } else { peakDeltaDisplay.textContent = "N/A"; peakCenterDisplay.textContent = "N/A"; } if (integralLine1X !== -1 && integralLine2X !== -1) { const start = Math.min(integralLine1X, integralLine2X), end = Math.max(integralLine1X, integralLine2X); let sum = 0; const bgLine = getBackgroundLine(); for (let i = start; i <= end; i++) { const signal = plottedData[i]; if (bgLine) { const background = bgLine.slope * i + bgLine.intercept; sum += (signal - background); } else { sum += signal; } } integralValueDisplay.textContent = sum.toExponential(3); } else { integralValueDisplay.textContent = "N/A"; } }
 function downloadTextFile(filename, text) { const a = document.createElement('a'); a.href = 'data:text/plain;charset=utf-8,' + encodeURIComponent(text); a.download = filename; document.body.appendChild(a); a.click(); document.body.removeChild(a); }
 document.body.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
-document.body.addEventListener('drop', async (e) => { e.preventDefault(); if (e.dataTransfer.files.length > 0 && e.dataTransfer.files[0].name.toLowerCase().endsWith('.spe')) await parseSpeFile(e.dataTransfer.files[0]); });
+document.body.addEventListener('drop', async (e) => { e.preventDefault(); if (e.dataTransfer.files.length > 0 && e.dataTransfer.files[0].name.toLowerCase().endsWith('.spe')) await parseSpeFile(e.dataTransfer.files[0]); });```
