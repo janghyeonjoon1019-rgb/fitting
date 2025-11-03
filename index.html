@@ -39,23 +39,27 @@
 
              <fieldset>
                 <legend>Data Cropping & Averaging</legend>
-                 <p>지정한 Y범위의 평균값을 계산하여 그래프를 그리고 텍스트로 저장합니다.</p>
+                 <p>지정한 범위와 간격으로 데이터를 평균내어 그래프를 그리고 텍스트로 저장합니다.</p>
+                <!-- ▼▼▼ STEP 입력창 복구 ▼▼▼ -->
                 <div class="crop-grid">
-                    <span>X Range:</span>
+                    <span>X:</span>
                     <input type="number" id="cropXFrom" placeholder="from">
                     <span>→</span>
                     <input type="number" id="cropXTo" placeholder="to">
+                    <span>step:</span>
+                    <input type="number" id="cropXStep" placeholder="step" value="1">
                 </div>
                 <div class="crop-grid">
-                    <span>Y Range:</span>
+                    <span>Y:</span>
                     <input type="number" id="cropYFrom" placeholder="from">
                     <span>→</span>
                     <input type="number" id="cropYTo" placeholder="to">
+                    <span>step:</span>
+                    <input type="number" id="cropYStep" placeholder="step" value="1">
                 </div>
-                <!-- ▼▼▼ 버튼 구조 변경 ▼▼▼ -->
+                <!-- ▲▲▲ STEP 입력창 복구 ▲▲▲ -->
                 <button id="calculateAndPlotBtn">평균화</button>
                 <button id="saveAvgDataBtn" style="display: none;">결과 텍스트로 저장</button>
-                <!-- ▲▲▲ 버튼 구조 변경 ▲▲▲ -->
             </fieldset>
         </div>
 
@@ -91,4 +95,62 @@
 
     <script src="script.js"></script>
 </body>
-</html>
+</html>```
+
+---
+
+### 2. CSS (`style.css`) - 최종 수정본
+
+`step` 입력창을 포함하는 `grid` 레이아웃으로 스타일을 되돌립니다.
+
+```css
+/* 기본 스타일 */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    background-color: #f4f4f4;
+    color: #333;
+    margin: 0;
+    padding: 20px;
+}
+header { text-align: center; margin-bottom: 20px; }
+main { display: flex; gap: 20px; }
+.panel { display: flex; flex-direction: column; gap: 15px; }
+#left-panel { flex: 1; }
+#right-panel { flex: 3; }
+fieldset { border: 1px solid #ccc; border-radius: 8px; padding: 15px; background-color: #fff; }
+legend { font-weight: bold; padding: 0 10px; }
+canvas { border: 1px solid #aaa; background-color: #fff; cursor: crosshair; }
+#canvas-container, #profile-container { width: 100%; margin-bottom: 10px; }
+#previewCanvas, #profileCanvas { width: 100%; height: auto; }
+
+/* 프레임 리스트 */
+#frame-list-container { max-height: 200px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; background-color: #fafafa; }
+.frame-item { display: block; margin-bottom: 5px; cursor: pointer; }
+.frame-item input { margin-right: 8px; }
+
+/* Intensity Control */
+.control-grid { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center; }
+
+/* ▼▼▼ CROP GRID 스타일 복구 ▼▼▼ */
+.crop-grid {
+    display: grid;
+    grid-template-columns: auto 1fr auto 1fr auto 1fr;
+    gap: 5px;
+    align-items: center;
+    margin-bottom: 10px;
+}
+/* ▲▲▲ CROP GRID 스타일 복구 ▲▲▲ */
+.crop-grid input[type="number"], .control-grid input[type="number"] { width: 100%; box-sizing: border-box; padding: 4px; }
+
+/* 버튼 */
+button { padding: 5px 10px; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; background-color: #f0f0f0; margin-top: 5px; margin-right: 5px; }
+button:hover { background-color: #e0e0e0; }
+
+/* 픽셀 정보창 */
+#pixel-info { position: absolute; bottom: 5px; left: 5px; background-color: rgba(0, 0, 0, 0.6); color: white; padding: 5px 8px; border-radius: 4px; font-size: 14px; pointer-events: none; display: none; }
+
+/* 분석 툴 */
+.tool-section { padding: 10px; border-bottom: 1px dashed #eee; }
+.tool-section:last-child { border-bottom: none; }
+.tool-section span { margin-left: 15px; }
+.tool-section b { color: #d9534f; }
