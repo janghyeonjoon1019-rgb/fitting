@@ -59,23 +59,48 @@ async function parseSpeFile(file) {
         const HEADER_SIZE = 4100;
         imageWidth = dataView.getUint16(42, true);
         imageHeight = dataView.getUint16(656, true);
-        const numFrames = dataView.getUint32(1446, true);
-        if (imageWidth === 0 || imageHeight === 0 || numFrames === 0) return alert('유효한 SPE 파일이 아닙니다.');
+        let numFrames = dataView.getUint32(1446, true); // let으로 변경하여 수정 가능하게 함
+
+        if (imageWidth === 0 || imageHeight === 0 || numFrames === 0) {
+            alert('유효한 SPE 파일이 아닙니다. (헤더 정보 없음)');
+            return;
+        }
 
         speFrames = [];
         const pixelsPerFrame = imageWidth * imageHeight;
+        const bytesPerFrame = pixelsPerFrame * 2;
+
+        // ▼▼▼ 안정성을 대폭 향상시킨 프레임 읽기 로직 ▼▼▼
         for (let i = 0; i < numFrames; i++) {
-            const frameOffset = HEADER_SIZE + (i * pixelsPerFrame * 2);
+            const frameOffset = HEADER_SIZE + (i * bytesPerFrame);
+            
+            // 파일 끝을 넘어가는 읽기 시도를 방지하는 안전장치
+            if (frameOffset + bytesPerFrame > buffer.byteLength) {
+                console.error(`읽기 오류: 프레임 ${i + 1}의 데이터가 파일 크기를 벗어납니다.`);
+                alert(`경고: 프레임 ${i + 1}을(를) 읽을 수 없습니다. 파일이 온전하지 않을 수 있습니다. 총 ${i}개의 프레임만 불러옵니다.`);
+                numFrames = i; // 실제 불러온 프레임 수로 조정
+                break; // 루프 중단
+            }
+            
             speFrames.push(new Uint16Array(buffer, frameOffset, pixelsPerFrame));
         }
 
-        updateFrameList(numFrames);
-        // 첫 번째 프레임을 기본으로 선택하고 표시
-        frameListContainer.querySelector('input[type=checkbox]').checked = true;
-        updateDisplay();
+        if (speFrames.length === 0) {
+            alert('파일에서 유효한 프레임을 불러오지 못했습니다.');
+            return;
+        }
+
+        updateFrameList(speFrames.length); // 실제 불러온 프레임 수로 리스트 업데이트
+        
+        const firstCheckbox = frameListContainer.querySelector('input[type=checkbox]');
+        if (firstCheckbox) {
+            firstCheckbox.checked = true;
+            updateDisplay();
+        }
+
     } catch (error) {
         console.error("파일 파싱 오류:", error);
-        alert("파일을 읽는 중 오류가 발생했습니다.");
+        alert("파일을 읽는 중 심각한 오류가 발생했습니다. 개발자 콘솔을 확인해주세요.");
     }
 }
 
@@ -89,26 +114,23 @@ function updateFrameList(numFrames) {
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
         checkbox.dataset.index = i;
-        checkbox.addEventListener('change', updateDisplay); // 핵심 이벤트 리스너
+        checkbox.addEventListener('change', updateDisplay);
         label.appendChild(checkbox);
         label.appendChild(document.createTextNode(` Frame ${i + 1}`));
         frameListContainer.appendChild(label);
     }
 }
 
-// (핵심 로직) 체크박스 상태에 따라 표시할 이미지를 결정하고 그리기
 function updateDisplay() {
     const checkedIndexes = [...frameListContainer.querySelectorAll('input:checked')].map(cb => parseInt(cb.dataset.index));
 
     if (checkedIndexes.length === 0) {
         currentDisplayData = null;
-        initialize(); // 캔버스 초기화
+        initialize();
     } else if (checkedIndexes.length === 1) {
-        // 1개 선택: 해당 프레임 데이터를 바로 사용
         currentDisplayData = speFrames[checkedIndexes[0]];
         drawImage();
     } else {
-        // 2개 이상 선택: 평균 이미지 계산
         const frameSize = imageWidth * imageHeight;
         const avgData = new Float32Array(frameSize).fill(0);
         for (const index of checkedIndexes) {
@@ -122,8 +144,10 @@ function updateDisplay() {
         currentDisplayData = avgData;
         drawImage();
     }
-    // 현재 표시된 이미지가 바뀌었으므로, 기존 프로필 그래프는 초기화
     pfCtx.clearRect(0,0,profileCanvas.width, profileCanvas.height);
+    // Reset analysis lines when display changes
+    peakLine1X = peakLine2X = integralLine1X = integralLine2X = -1;
+    updateAnalysis();
 }
 
 // --- 캔버스 드로잉 ---
@@ -164,10 +188,7 @@ function drawProfileGraph() {
     pfCtx.clearRect(0, 0, profileCanvas.width, profileCanvas.height);
     
     let minVal = profileData[0], maxVal = profileData[0];
-    profileData.forEach(v => {
-        if(v < minVal) minVal = v;
-        if(v > maxVal) maxVal = v;
-    });
+    profileData.forEach(v => { if(v < minVal) minVal = v; if(v > maxVal) maxVal = v; });
     const range = maxVal - minVal === 0 ? 1 : maxVal - minVal;
 
     pfCtx.beginPath();
@@ -183,7 +204,7 @@ function drawProfileGraph() {
     const drawLine = (x, color) => {
         if (x === -1) return;
         const canvasX = (x / (imageWidth - 1)) * profileCanvas.width;
-        pfCtx.beginPath(); pfCtx.strokeStyle = color;
+        pfCtx.beginPath(); pfCtx.strokeStyle = color; pfCtx.lineWidth = 1;
         pfCtx.moveTo(canvasX, 0); pfCtx.lineTo(canvasX, profileCanvas.height);
         pfCtx.stroke();
     };
@@ -195,7 +216,8 @@ function drawProfileGraph() {
 rangeMinInput.addEventListener('input', drawImage);
 rangeMaxInput.addEventListener('input', drawImage);
 
-function showPixelInfo(e) { /* 이전과 동일 */
+function showPixelInfo(e) {
+    if (!currentDisplayData) return;
     const rect = previewCanvas.getBoundingClientRect();
     const x = Math.floor((e.clientX - rect.left) * (previewCanvas.width / rect.width));
     const y = Math.floor((e.clientY - rect.top) * (previewCanvas.height / rect.height));
@@ -208,17 +230,18 @@ function showPixelInfo(e) { /* 이전과 동일 */
     }
 }
 
-previewCanvas.addEventListener('click', (e) => { /* 행(row) 선택 로직 */
+previewCanvas.addEventListener('click', (e) => {
+    if (!currentDisplayData) return;
     const rect = previewCanvas.getBoundingClientRect();
     const y = Math.round((e.clientY - rect.top) * (previewCanvas.height / rect.height));
     if (y >= 0 && y < imageHeight) {
         selectedRowY = y;
-        drawImage(); // 선 그리고 그래프 갱신
+        drawImage();
     }
 });
 
-profileCanvas.addEventListener('click', (e) => { /* 그래프 분석 로직 */
-    if (!currentDisplayData) return;
+profileCanvas.addEventListener('click', (e) => {
+    if (!currentDisplayData || selectedRowY === -1) return;
     const rect = profileCanvas.getBoundingClientRect();
     const x = Math.round((e.clientX - rect.left) * (imageWidth - 1) / rect.width);
     if (settingPeakLine === 1) peakLine1X = x; else if (settingPeakLine === 2) peakLine2X = x;
@@ -232,12 +255,11 @@ setPeak2Btn.addEventListener('click', () => settingPeakLine = 2);
 setIntegral1Btn.addEventListener('click', () => settingIntegralLine = 1);
 setIntegral2Btn.addEventListener('click', () => settingIntegralLine = 2);
 
-saveAvgDataBtn.addEventListener('click', () => { /* 이전과 동일 */
+saveAvgDataBtn.addEventListener('click', () => {
     if (!currentDisplayData) return alert("먼저 파일을 불러오세요.");
     const xFrom = parseInt(cropXFrom.value), xTo = parseInt(cropXTo.value), xStep = parseInt(cropXStep.value);
     const yFrom = parseInt(cropYFrom.value), yTo = parseInt(cropYTo.value), yStep = parseInt(cropYStep.value);
     if ([xFrom, xTo, xStep, yFrom, yTo, yStep].some(isNaN)) return alert("모든 From, To, Step 값을 입력해주세요.");
-
     let textContent = "X_center,Y_center,Average_Value\n";
     for (let y = yFrom; y < yTo; y += yStep) {
         for (let x = xFrom; x < xTo; x += xStep) {
@@ -248,9 +270,7 @@ saveAvgDataBtn.addEventListener('click', () => { /* 이전과 동일 */
                     count++;
                 }
             }
-            if (count > 0) {
-                textContent += `${x + xStep / 2},${y + yStep / 2},${(sum / count).toFixed(4)}\n`;
-            }
+            if (count > 0) textContent += `${x + xStep / 2},${y + yStep / 2},${(sum / count).toFixed(4)}\n`;
         }
     }
     downloadTextFile("cropped_average_data.txt", textContent);
@@ -258,21 +278,23 @@ saveAvgDataBtn.addEventListener('click', () => { /* 이전과 동일 */
 
 // --- 분석 계산 ---
 function updateAnalysis() {
-    if (peakLine1X !== -1 && peakLine2X !== -1) { /* 이전과 동일 */
-        peakDeltaDisplay.textContent = Math.abs(peakLine1X - peakLine2X);
-        peakCenterDisplay.textContent = ((peakLine1X + peakLine2X) / 2).toFixed(2);
-    }
+    const deltaDisp = peakDeltaDisplay, centerDisp = peakCenterDisplay, intDisp = integralValueDisplay;
+    if (peakLine1X !== -1 && peakLine2X !== -1) {
+        deltaDisp.textContent = Math.abs(peakLine1X - peakLine2X);
+        centerDisp.textContent = ((peakLine1X + peakLine2X) / 2).toFixed(2);
+    } else { deltaDisp.textContent = "N/A"; centerDisp.textContent = "N/A"; }
+
     if (integralLine1X !== -1 && integralLine2X !== -1 && selectedRowY !== -1) {
         const profileData = currentDisplayData.slice(selectedRowY * imageWidth, (selectedRowY + 1) * imageWidth);
         const start = Math.min(integralLine1X, integralLine2X), end = Math.max(integralLine1X, integralLine2X);
         let sum = 0;
         for (let i = start; i <= end; i++) sum += profileData[i];
-        integralValueDisplay.textContent = sum.toExponential(3);
-    }
+        intDisp.textContent = sum.toExponential(3);
+    } else { intDisp.textContent = "N/A"; }
 }
 
 // --- 헬퍼 함수 및 드래그 앤 드롭 ---
-function downloadTextFile(filename, text) { /* 이전과 동일 */
+function downloadTextFile(filename, text) {
     const a = document.createElement('a');
     a.href = 'data:text/plain;charset=utf-8,' + encodeURIComponent(text);
     a.download = filename;
