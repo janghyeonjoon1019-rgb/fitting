@@ -306,8 +306,17 @@ drawFitBtn.addEventListener('click', () => {
 });
 
 saveAvgDataBtn.addEventListener('click', () => {
-    // 이 함수는 이전에 제공된 것과 동일하며 변경 사항이 없습니다.
-    // ...
+    if (!currentDisplayData) return alert("먼저 파일을 불러오세요.");
+    const xFrom = parseInt(cropXFrom.value), xTo = parseInt(cropXTo.value), xStep = parseInt(cropXStep.value);
+    const yFrom = parseInt(cropYFrom.value), yTo = parseInt(cropYTo.value), yStep = parseInt(cropYStep.value);
+    if ([xFrom, xTo, xStep, yFrom, yTo, yStep].some(isNaN)) return alert("모든 From, To, Step 값을 입력해주세요.");
+    let textContent = "X_center,Y_center,Average_Value\n";
+    for (let y = yFrom; y < yTo; y += yStep) for (let x = xFrom; x < xTo; x += xStep) {
+        let sum = 0, count = 0;
+        for (let j = y; j < y + yStep && j < yTo && j < imageHeight; j++) for (let i = x; i < x + xStep && i < xTo && i < imageWidth; i++) { sum += currentDisplayData[j * imageWidth + i]; count++; }
+        if (count > 0) textContent += `${(x + (x+xStep-1))/2},${(y + (y+yStep-1))/2},${(sum / count).toFixed(4)}\n`;
+    }
+    downloadTextFile("cropped_average_data.txt", textContent);
 });
 
 setPeak1Btn.addEventListener('click', () => settingPeakLine = 1);
