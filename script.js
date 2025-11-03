@@ -32,9 +32,8 @@ let imageWidth = 0, imageHeight = 0, selectedRowY = -1;
 let settingPeakLine = 0, peakLine1X = -1, peakLine2X = -1;
 let settingIntegralLine = 0, integralLine1X = -1, integralLine2X = -1;
 let settingBgPoint = 0, bgPoint1 = null, bgPoint2 = null;
-// 줌/패닝 상태 변수
 let zoom = 1, panOffset = { x: 0, y: 0 };
-let isPanning = false, panStart = { x: 0, y: 0 };
+let isPanning = false, panStartMousePos = { x: 0, y: 0 };
 
 // --- 초기화 ---
 function initialize() {
@@ -55,25 +54,37 @@ async function handleFileSelect(input) { if (input.files.length) await parseSpeF
 async function parseSpeFile(file) {
     try {
         const buffer = await file.arrayBuffer();
-        // ▼▼▼ "new new" 오타를 수정한 최종 버전입니다 ▼▼▼
         const dataView = new DataView(buffer);
-        // ▲▲▲ "new new" 오타를 수정한 최종 버전입니다 ▲▲▲
         const HEADER_SIZE = 4100;
-        imageWidth = dataView.getUint16(42, true); imageHeight = dataView.getUint16(656, true);
+        imageWidth = dataView.getUint16(42, true);
+        imageHeight = dataView.getUint16(656, true);
         let numFrames = dataView.getUint32(1446, true);
         if (imageWidth === 0 || imageHeight === 0 || numFrames === 0) return alert('유효한 SPE 파일이 아닙니다.');
+        
         speFrames = [];
-        const pixelsPerFrame = imageWidth * imageHeight, bytesPerFrame = pixelsPerFrame * 2;
+        const pixelsPerFrame = imageWidth * imageHeight;
+        const bytesPerFrame = pixelsPerFrame * 2;
         for (let i = 0; i < numFrames; i++) {
             const frameOffset = HEADER_SIZE + (i * bytesPerFrame);
-            if (frameOffset + bytesPerFrame > buffer.byteLength) { numFrames = i; break; }
+            if (frameOffset + bytesPerFrame > buffer.byteLength) {
+                console.warn(`파일 끝 도달: 프레임 ${i + 1}부터 읽을 수 없습니다.`);
+                numFrames = i;
+                break;
+            }
+            // ▼▼▼ Uint18Array 오타를 수정한 최종 버전입니다 ▼▼▼
             speFrames.push(new Uint16Array(buffer, frameOffset, pixelsPerFrame));
+            // ▲▲▲ Uint18Array 오타를 수정한 최종 버전입니다 ▲▲▲
         }
+        
         if (speFrames.length === 0) return alert('파일에서 유효한 프레임을 불러오지 못했습니다.');
+        
         updateFrameList(speFrames.length);
         const firstCheckbox = frameListContainer.querySelector('input[type=checkbox]');
         if (firstCheckbox) { firstCheckbox.checked = true; updateDisplay(); }
-    } catch (error) { console.error("파일 파싱 오류:", error); alert("파일을 읽는 중 오류가 발생했습니다."); }
+    } catch (error) {
+        console.error("파일 파싱 오류:", error);
+        alert("파일을 읽는 중 오류가 발생했습니다. 개발자 콘솔을 확인해주세요.");
+    }
 }
 
 // --- UI 업데이트 및 상태 관리 ---
@@ -92,8 +103,11 @@ function updateDisplay() {
     if (checkedIndexes.length === 0) { currentDisplayData = null; initialize(); return; }
     else if (checkedIndexes.length === 1) { currentDisplayData = speFrames[checkedIndexes[0]]; }
     else {
-        const frameSize = imageWidth * imageHeight, avgData = new Float32Array(frameSize).fill(0);
-        for (const index of checkedIndexes) for (let i = 0; i < frameSize; i++) avgData[i] += speFrames[index][i];
+        const frameSize = imageWidth * imageHeight;
+        const avgData = new Float32Array(frameSize).fill(0);
+        for (const index of checkedIndexes) {
+            for (let i = 0; i < frameSize; i++) avgData[i] += speFrames[index][i];
+        }
         for (let i = 0; i < frameSize; i++) avgData[i] /= checkedIndexes.length;
         currentDisplayData = avgData;
     }
@@ -170,13 +184,8 @@ function drawProfileGraph() {
 rangeMinInput.addEventListener('input', drawImage);
 rangeMaxInput.addEventListener('input', drawImage);
 
-function getCanvasCoords(e) {
-    const rect = previewCanvas.getBoundingClientRect();
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
-}
-function getImageCoords(canvasPos) {
-    return { x: (canvasPos.x - panOffset.x) / zoom, y: (canvasPos.y - panOffset.y) / zoom };
-}
+function getCanvasCoords(e) { const rect = previewCanvas.getBoundingClientRect(); return { x: e.clientX - rect.left, y: e.clientY - rect.top }; }
+function getImageCoords(canvasPos) { return { x: (canvasPos.x - panOffset.x) / zoom, y: (canvasPos.y - panOffset.y) / zoom }; }
 
 function showPixelInfo(e) {
     if (!currentDisplayData) return;
@@ -189,41 +198,22 @@ function showPixelInfo(e) {
     } else { pixelInfo.style.display = 'none'; }
 }
 
-previewCanvas.addEventListener('click', (e) => {
-    if (!currentDisplayData || isPanning) return;
-    const imagePos = getImageCoords(getCanvasCoords(e));
-    const y = Math.round(imagePos.y);
-    if (y >= 0 && y < imageHeight) { selectedRowY = y; drawImage(); }
-});
-
-previewCanvas.addEventListener('wheel', (e) => {
-    e.preventDefault();
-    if (!currentDisplayData) return;
-    const canvasPos = getCanvasCoords(e);
-    const zoomFactor = 1.1;
-    const oldZoom = zoom;
-    if (e.deltaY < 0) zoom *= zoomFactor; else zoom /= zoomFactor;
-    zoom = Math.max(0.1, Math.min(20, zoom));
-    panOffset.x = canvasPos.x - (canvasPos.x - panOffset.x) / oldZoom * zoom;
-    panOffset.y = canvasPos.y - (canvasPos.y - panOffset.y) / oldZoom * zoom;
-    drawImage();
-});
-
-let panStartMousePos = {x: 0, y: 0};
+let panTimeout;
 previewCanvas.addEventListener('mousedown', (e) => {
     if (!currentDisplayData) return;
     panStartMousePos = { x: e.clientX, y: e.clientY };
-    // isPanning 플래그를 약간 지연시켜, 단순 클릭과 패닝 시작을 구분
-    const panTimeout = setTimeout(() => {
-        isPanning = true;
-        previewCanvas.style.cursor = 'grabbing';
-    }, 150);
-    
-    previewCanvas.addEventListener('mouseup', () => {
-        clearTimeout(panTimeout);
-        isPanning = false;
-        previewCanvas.style.cursor = 'crosshair';
-    }, { once: true }); // 이벤트가 한 번만 실행되도록 설정
+    panTimeout = setTimeout(() => { isPanning = true; previewCanvas.style.cursor = 'grabbing'; }, 150);
+});
+
+previewCanvas.addEventListener('mouseup', (e) => {
+    clearTimeout(panTimeout);
+    if (!isPanning) { // 패닝이 시작되지 않았을 때만 클릭으로 간주
+        const imagePos = getImageCoords(getCanvasCoords(e));
+        const y = Math.round(imagePos.y);
+        if (y >= 0 && y < imageHeight) { selectedRowY = y; drawImage(); }
+    }
+    isPanning = false;
+    previewCanvas.style.cursor = 'crosshair';
 });
 
 previewCanvas.addEventListener('mouseleave', () => { isPanning = false; previewCanvas.style.cursor = 'crosshair'; });
@@ -240,6 +230,19 @@ previewCanvas.addEventListener('mousemove', (e) => {
     }
 });
 
+previewCanvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    if (!currentDisplayData) return;
+    const canvasPos = getCanvasCoords(e);
+    const zoomFactor = 1.1;
+    const oldZoom = zoom;
+    if (e.deltaY < 0) zoom *= zoomFactor; else zoom /= zoomFactor;
+    zoom = Math.max(0.1, Math.min(20, zoom));
+    panOffset.x = canvasPos.x - (canvasPos.x - panOffset.x) / oldZoom * zoom;
+    panOffset.y = canvasPos.y - (canvasPos.y - panOffset.y) / oldZoom * zoom;
+    drawImage();
+});
+
 profileCanvas.addEventListener('click', (e) => {
     if (!plottedData) return;
     const rect = profileCanvas.getBoundingClientRect(), x = Math.round((e.clientX - rect.left) * (plottedData.length - 1) / rect.width);
@@ -249,6 +252,7 @@ profileCanvas.addEventListener('click', (e) => {
     settingPeakLine = 0; settingIntegralLine = 0; settingBgPoint = 0;
     updateAnalysis(); drawProfileGraph();
 });
+
 calculateAndPlotBtn.addEventListener('click', () => {
     if (!currentDisplayData) return alert("먼저 파일을 불러오세요.");
     const xFrom = parseInt(cropXFrom.value), xTo = parseInt(cropXTo.value), yFrom = parseInt(cropYFrom.value), yTo = parseInt(cropYTo.value);
@@ -263,6 +267,7 @@ calculateAndPlotBtn.addEventListener('click', () => {
     drawProfileGraph();
     saveAvgDataBtn.style.display = 'inline-block';
 });
+
 saveAvgDataBtn.addEventListener('click', () => {
     if (!currentDisplayData) return alert("먼저 파일을 불러오세요.");
     const xFrom = parseInt(cropXFrom.value), xTo = parseInt(cropXTo.value), xStep = parseInt(cropXStep.value), yFrom = parseInt(cropYFrom.value), yTo = parseInt(cropYTo.value), yStep = parseInt(cropYStep.value);
@@ -275,6 +280,7 @@ saveAvgDataBtn.addEventListener('click', () => {
     }
     downloadTextFile("cropped_average_data.txt", textContent);
 });
+
 setPeak1Btn.addEventListener('click', () => settingPeakLine = 1);
 setPeak2Btn.addEventListener('click', () => settingPeakLine = 2);
 setBg1Btn.addEventListener('click', () => settingBgPoint = 1);
