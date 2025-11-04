@@ -266,7 +266,7 @@ saveAvgDataBtn.addEventListener('click', () => {
     if (!currentDisplayData) return alert("먼저 파일을 불러오세요.");
     const xFrom = parseInt(cropXFrom.value), xTo = parseInt(cropXTo.value), xStep = parseInt(cropXStep.value), yFrom = parseInt(cropYFrom.value), yTo = parseInt(cropYTo.value), yStep = parseInt(cropYStep.value);
     if ([xFrom, xTo, xStep, yFrom, yTo, yStep].some(isNaN)) return alert("모든 From, To, Step 값을 입력해주세요.");
-    let textContent = "X_center,Y_center,Average_Value\n";
+    //let textContent = "X_center,Y_center,Average_Value\n";
     for (let y = yFrom; y < yTo; y += yStep) for (let x = xFrom; x < xTo; x += xStep) {
         let sum = 0, count = 0;
         for (let j = y; j < y + yStep && j < yTo && j < imageHeight; j++) for (let i = x; i < x + xStep && i < xTo && i < imageWidth; i++) { sum += currentDisplayData[j * imageWidth + i]; count++; }
