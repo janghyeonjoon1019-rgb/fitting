@@ -77,8 +77,9 @@ async function parseSpeFile(file) {
                 const val = rawFrame[j];
                 processedFrame[j] = val < 0 ? 0 : val;
             }
+            speFrames.push(processedFrame);
             //여기까지 수정. 0520
-            speFrames.push(new Uint16Array(buffer, frameOffset, pixelsPerFrame));
+            //speFrames.push(new Uint16Array(buffer, frameOffset, pixelsPerFrame));
         }
         if (speFrames.length === 0) return alert('파일에서 유효한 프레임을 불러오지 못했습니다.');
         updateFrameList(speFrames.length);
