@@ -60,9 +60,16 @@ async function parseSpeFile(file) {
         imageWidth = dataView.getUint16(42, true);
         imageHeight = dataView.getUint16(656, true);
         let numFrames = dataView.getUint32(1446, true);
+        const dataTypeCode = dataView.getInt16(108, true); //수정
         if (imageWidth === 0 || imageHeight === 0 || numFrames === 0) return alert('유효한 SPE 파일이 아닙니다.');
+        //
+        let bytesPerPixel = 2;
+        if (dataTypeCode === 0 || dataTypeCode === 1) {
+            bytesPerPixel = 4;
+        }
+        //0520 수정
         speFrames = [];
-        const pixelsPerFrame = imageWidth * imageHeight, bytesPerFrame = pixelsPerFrame * 2;
+        const pixelsPerFrame = imageWidth * imageHeight, bytesPerFrame = pixelsPerFrame * bytesPerPixel; //2->bytesPerPixel 0520 수정
         for (let i = 0; i < numFrames; i++) {
             const frameOffset = HEADER_SIZE + (i * bytesPerFrame);
             if (frameOffset + bytesPerFrame > buffer.byteLength) {
@@ -70,12 +77,33 @@ async function parseSpeFile(file) {
                 numFrames = i;
                 break;
             }
-            // 0으로
-            const rawFrame = new Int16Array(buffer, frameOffset, pixelsPerFrame);
+            //
+            let rawFrame;
+            switch (dataTypeCode) {
+                case 0: // Float (32-bit)
+                    rawFrame = new Float32Array(buffer, frameOffset, pixelsPerFrame);
+                    break;
+                case 1: // Long (32-bit Signed)
+                    rawFrame = new Int32Array(buffer, frameOffset, pixelsPerFrame);
+                    break;
+                case 2: // Int (16-bit Signed)
+                    rawFrame = new Int16Array(buffer, frameOffset, pixelsPerFrame);
+                    break;
+                case 3: // Unsigned Int (16-bit)
+                default:
+                    rawFrame = new Uint16Array(buffer, frameOffset, pixelsPerFrame);
+                    break;
+            }
             const processedFrame = new Uint16Array(pixelsPerFrame);
-            for(let j = 0; j < pixelsPerFrame; j++){
-                const val = rawFrame[j];
-                processedFrame[j] = val < 0 ? 0 : val;
+            for (let j = 0; j < pixelsPerFrame; j++) {
+                let val = rawFrame[j];
+                
+                // 1. 반올림 처리 (실수형 대응)
+                val = Math.round(val);
+                
+                // 2. 음수일 경우 0으로 치환 및 오버플로우 방지 (Clamping)
+                // Uint16Array에 넣으므로 65535를 넘지 않게 처리할 수도 있습니다.
+                processedFrame[j] = val < 0 ? 0 : (val > 65535 ? 65535 : val);
             }
             speFrames.push(processedFrame);
             //여기까지 수정. 0520
