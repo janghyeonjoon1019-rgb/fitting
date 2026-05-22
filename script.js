@@ -307,7 +307,7 @@ saveAvgDataBtn.addEventListener('click', () => {
     for (let y = yFrom; y < yTo; y += yStep) for (let x = xFrom; x < xTo; x += xStep) {
         let sum = 0, count = 0;
         for (let j = y; j < y + yStep && j < yTo && j < imageHeight; j++) for (let i = x; i < x + xStep && i < xTo && i < imageWidth; i++) { sum += currentDisplayData[j * imageWidth + i]; count++; }
-        if (count > 0) textContent += `${(x + (x+xStep-1))/2},${(y - yFrom + yStep) / yStep},${Math.round(sum / count)}\n`;
+        if (count > 0) textContent += `${Math.round(sum / count)}\n`;
     }
     downloadTextFile("cropped_average_data.txt", textContent);
 });
